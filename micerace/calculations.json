@@ -1,0 +1,198 @@
+[
+    {
+        "name": "gold",
+        "totalGames": 2459,
+        "countWinner": 983,
+        "color": "yellow",
+        "family": "4",
+        "rating": 2,
+        "win_ratio": 0.3998,
+        "1h_win_ratio": [
+            0.5,
+            2
+        ],
+        "2h_win_ratio": [
+            0.5,
+            4
+        ],
+        "3h_win_ratio": [
+            0.5,
+            6
+        ],
+        "6h_win_ratio": [
+            0.54,
+            13
+        ],
+        "12h_win_ratio": [
+            0.57,
+            21
+        ],
+        "24h_win_ratio": [
+            0.61,
+            23
+        ],
+        "30d_win_ratio": [
+            0.4,
+            784
+        ],
+        "3m_win_ratio": [
+            0.42,
+            2207
+        ],
+        "6m_win_ratio": [
+            0.42,
+            2251
+        ],
+        "1y_win_ratio": [
+            0.42,
+            2251
+        ]
+    },
+    {
+        "name": "zeus",
+        "totalGames": 1814,
+        "countWinner": 548,
+        "color": "yellow",
+        "family": "6",
+        "rating": 1.51,
+        "win_ratio": 0.3021,
+        "1h_win_ratio": [
+            0.5,
+            2
+        ],
+        "2h_win_ratio": [
+            0.4,
+            5
+        ],
+        "3h_win_ratio": [
+            0.57,
+            7
+        ],
+        "6h_win_ratio": [
+            0.64,
+            11
+        ],
+        "12h_win_ratio": [
+            0.42,
+            19
+        ],
+        "24h_win_ratio": [
+            0.43,
+            21
+        ],
+        "30d_win_ratio": [
+            0.22,
+            639
+        ],
+        "3m_win_ratio": [
+            0.32,
+            1700
+        ],
+        "6m_win_ratio": [
+            0.32,
+            1700
+        ],
+        "1y_win_ratio": [
+            0.32,
+            1700
+        ]
+    },
+    {
+        "name": "fluffy",
+        "totalGames": 1697,
+        "countWinner": 375,
+        "color": "yellow",
+        "family": "5",
+        "rating": 1.1,
+        "win_ratio": 0.221,
+        "1h_win_ratio": [
+            0.0,
+            2
+        ],
+        "2h_win_ratio": [
+            0.0,
+            2
+        ],
+        "3h_win_ratio": [
+            0.0,
+            4
+        ],
+        "6h_win_ratio": [
+            0.25,
+            8
+        ],
+        "12h_win_ratio": [
+            0.21,
+            14
+        ],
+        "24h_win_ratio": [
+            0.29,
+            17
+        ],
+        "30d_win_ratio": [
+            0.23,
+            618
+        ],
+        "3m_win_ratio": [
+            0.24,
+            1582
+        ],
+        "6m_win_ratio": [
+            0.24,
+            1582
+        ],
+        "1y_win_ratio": [
+            0.24,
+            1582
+        ]
+    },
+    {
+        "name": "merlin",
+        "totalGames": 2062,
+        "countWinner": 336,
+        "color": "grey",
+        "family": "1",
+        "rating": 0.81,
+        "win_ratio": 0.1629,
+        "1h_win_ratio": [
+            0.5,
+            2
+        ],
+        "2h_win_ratio": [
+            0.5,
+            2
+        ],
+        "3h_win_ratio": [
+            0.25,
+            4
+        ],
+        "6h_win_ratio": [
+            0.11,
+            9
+        ],
+        "12h_win_ratio": [
+            0.06,
+            17
+        ],
+        "24h_win_ratio": [
+            0.05,
+            19
+        ],
+        "30d_win_ratio": [
+            0.16,
+            676
+        ],
+        "3m_win_ratio": [
+            0.15,
+            1833
+        ],
+        "6m_win_ratio": [
+            0.16,
+            1882
+        ],
+        "1y_win_ratio": [
+            0.16,
+            1882
+        ]
+    }
+]
