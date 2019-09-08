@@ -22,7 +22,7 @@ BASE_URL = 'https://micerace.com'
 HISTORICAL_RACES_URL = os.path.join(BASE_URL, 'games', 'allgames')
 RACE_URL = os.path.join(BASE_URL, 'race')
 LEADERBOARD_URL = os.path.join(RACE_URL, 'leaders')
-NUM_HTTP_WORKERS = 10
+NUM_HTTP_WORKERS = 3
 
 
 class NoMoreRacesException(Exception):
