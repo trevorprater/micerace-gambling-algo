@@ -1,92 +1,150 @@
-from pprint import pprint
-import json
-from datetime import datetime, timedelta
-from collections import OrderedDict
-
-import requests
-from retry import retry
-from lazy import lazy
-
-from micerace.race import get_historical_races
-from utils.util import LEADERBOARD_URL
+from enum import Enum
+from datetime import datetime
+import statistics
 
 
-#@retry(requests.RequestException, tries=5, delay=1, backoff=1, jitter=1)
-def get_mice(target_mice=None, use_cache=False, num_refresh_pages=5):
-    r = requests.get(LEADERBOARD_URL)
-    mice = json.loads(r.content.decode('utf-8'))['data']
-    for m in mice:
-        m.update({'name': m['name'].lower()})
-
-    if target_mice is not None:
-        mice = [OrderedDict(m) for m in mice if m['name'] in target_mice]
-    else:
-        mice = [OrderedDict(m) for m in mice if m['name']]
-
-    races = get_historical_races(use_cache=use_cache, num_refresh_pages=num_refresh_pages)
-
-    for mouse in mice:
-        mouse.update(
-            OrderedDict({
-                'name': mouse['name'].lower(),
-                'win_ratio': round(mouse['countWinner']/float(mouse['totalGames']), 4),
-                '1h_win_ratio': get_win_ratio_over_time(mouse, timedelta(hours=1), races=races, use_cache=use_cache),
-                '2h_win_ratio': get_win_ratio_over_time(mouse, timedelta(hours=2), races=races, use_cache=use_cache),
-                '3h_win_ratio': get_win_ratio_over_time(mouse, timedelta(hours=3), races=races, use_cache=use_cache),
-                '6h_win_ratio': get_win_ratio_over_time(mouse, timedelta(hours=6), races=races, use_cache=use_cache),
-                '12h_win_ratio': get_win_ratio_over_time(mouse, timedelta(hours=12), races=races, use_cache=use_cache),
-                '24h_win_ratio': get_win_ratio_over_time(mouse, timedelta(hours=24), races=races, use_cache=use_cache),
-                '3d_win_ratio': get_win_ratio_over_time(mouse, timedelta(hours=24*3), races=races, use_cache=use_cache),
-                '5d_win_ratio': get_win_ratio_over_time(mouse, timedelta(hours=24*5), races=races, use_cache=use_cache),
-                '7d_win_ratio': get_win_ratio_over_time(mouse, timedelta(hours=24*7), races=races, use_cache=use_cache),
-                '10d_win_ratio': get_win_ratio_over_time(mouse, timedelta(hours=24*10), races=races, use_cache=use_cache),
-                '30d_win_ratio': get_win_ratio_over_time(mouse, timedelta(days=30), races=races, use_cache=use_cache),
-                '90d_win_ratio': get_win_ratio_over_time(mouse, timedelta(days=30*3), races=races, use_cache=use_cache),
-                '180d_win_ratio': get_win_ratio_over_time(mouse, timedelta(days=30*6), races=races, use_cache=use_cache),
-                '1y_win_ratio': get_win_ratio_over_time(mouse, timedelta(days=365), races=races, use_cache=use_cache),
-            })
-        )
-
-    return mice
+class MouseColors(Enum):
+    brown = 1
+    black = 2
+    grey = 3
+    gray = 3
+    yellow = 4
+    white = 5
+    orange = 6
+    silver = 7
 
 
-def get_races_for_mouse(mouse_name, races):
-    _races = []
-    for race in races:
-        if mouse_name in race['mice']:
-            _races.append(race)
-    return _races
+class Mouse:
+    def __init__(self, **kwargs):
+        self.name = kwargs['name'].lower()
+        self.family = int(kwargs['family'])
+        self.site_rating = kwargs['rating']
+        self.color = kwargs['color'].lower()
+        self.color_num = getattr(MouseColors, self.color)
+
+        self.kwargs = kwargs
+
+        self.all_races = dict()
+        self.winning_races = []
+        self.losing_races = []
+        self.completed_races = []
+        self.reset_races = []
+        self.cancelled_races = []
+
+        self.__validate_data_integrity()
+
+    @property
+    def total_races_won(self):
+        return len(self.winning_races)
+
+    @property
+    def total_races_lost(self):
+        return len(self.losing_races)
+
+    @property
+    def total_races_completed(self):
+        return len(self.completed_races)
+
+    @property
+    def lifetime_win_ratio(self):
+        if self.total_races_won + self.total_races_lost == 0:
+            return 0.0
+
+        return round(self.total_races_won / float(self.total_races_lost), 4)
+
+    def __validate_data_integrity(self):
+        if not all([c.isdigit() for c in self.kwargs['family']]):
+            raise Exception("Family value is not a number! Modify logic in code!")
+
+    def add_race(self, race):
+        if race.id in self.all_races:
+            raise Exception(f"Race: {race.id} already associated with {self.name}")
+
+        self.all_races[race.id] = race
+
+        if race.completed:
+            self.completed_races.append(race)
+            if race.winner_name == self.name:
+                self.winning_races.append(race)
+            else:
+                self.losing_races.append(race)
+
+        if race.reset or race.cancelled:
+            if race.reset:
+                self.reset_races.append(race)
+            if race.cancelled:
+                self.cancelled_races.append(race.cancelled)
+
+        if self.total_races_lost + self.total_races_won != self.total_races_completed:
+            raise Exception(
+                f"total_races_won ({self.total_races_won}) + total_races_lost ({self.total_races_lost}) "
+                f"!= completed_races ({self.total_races_completed}) for {self.name}!")
+
+    def _process_races(self):
+        for race_id, race in self.all_races.items():
+
+            if race.completed:
+                self.completed_races.append(race)
+                if race.winner == self.name:
+                    self.winning_races.append(race)
+                else:
+                    self.losing_races.append(race)
+
+            if race.reset:
+                self.reset_races.append(race)
+                continue
+
+            if race.cancelled:
+                self.cancelled_races.append(race.cancelled)
+                continue
+
+    def win_ratio_since(self, time_delta):
+        now = datetime.utcnow()
+        max_race_age = now - time_delta
+
+        races_won, races_lost = 0, 0
+
+        for race in self.winning_races:
+            if race.completed_at >= max_race_age:
+                races_won += 1
+
+        for race in self.losing_races:
+            if race.completed_at >= max_race_age:
+                races_lost += 1
+
+        if races_won == 0 or races_lost == 0:
+            return 0.0, 0
+
+        ratio = round(races_won / float(races_lost), 3)
+        total_races = races_won + races_lost
+
+        return ratio, total_races
 
 
-def get_average_race_time(mouse, delta, races):
-    pass
+    def win_times_since(self, time_delta):
+        now = datetime.utcnow()
+        max_race_age = now - time_delta
 
+        times = []
+        for race in self.winning_races:
+            if race.completed_at >= max_race_age:
+                times.append(race.elapsed_time)
 
-def get_win_ratio_over_time(mouse, delta, races, use_cache=False):
-    now = datetime.utcnow()
-    max_age = now - delta
-    races_won = 0
-    races_lost = 0
-    races_with_mouse = list(filter(lambda r: mouse['name'] in r['mice'], races.values()))
-    for race in races_with_mouse:
-        # If race successfully completed:
-        if race['completed'] and race['raceIsReset'] is False and race['raceCancelled'] is False:
-            # If time criteria is met:
-            if race['raceComplete'] >= max_age:
-                # If mouse in race:
-                if mouse['name'] in race['mice']:
-                    if race['winnerName'] == mouse['name']:
-                        races_won += 1
-                    else:
-                        races_lost += 1
-    if races_won + races_lost == 0:
-        return 0.0, 0
-    return round((races_won/float(races_lost + races_won)), 2), races_won + races_lost
+        stats = {
+            #'min_win_time': min(times) if len(times) else None,
+            #'max_win_time': max(times) if len(times) else None,
+            'mean_win_time': round(statistics.mean(times), 2) if len(times) else None,
+            'median_win_time': statistics.median(times) if len(times) else None,
+        }
 
+        # TODO / NOTE removing None values for human-readability
+        return {k: v for k, v in stats.items() if v is not None}
 
-if __name__ == '__main__':
-    mice = get_mice(['flamengo', 'mickey', 'merlin', 'dagi'], use_cache=True, num_refresh_pages=10)
-    with open('calculations.json', 'w+') as outfile:
-        outfile.write(json.dumps(mice, indent=4))
-    pprint(mice)
-    pass
+    def interval_stats(self, time_delta):
+        win_ratio, total_races = self.win_ratio_since(time_delta)
+        return {
+            'win_ratio': win_ratio,
+            'total_races': total_races,
+            **self.win_times_since(time_delta)
+        }
+
