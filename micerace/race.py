@@ -20,18 +20,26 @@ class NoMoreRacesException(Exception):
     pass
 
 
-def get_historical_races(use_cache=False):
+def get_historical_races(use_cache=False, num_refresh_pages=5):
+    all_races = OrderedDict()
     if use_cache:
         with open('races.pickle', 'rb') as infile:
-            return pickle.load(infile)
-    all_races = []
-    _races, num_total_races, _ = get_historical_races_by_page(1)
-    page_size = len(_races)
+            all_races.update(pickle.load(infile))
+            for page in range(1, num_refresh_pages+1):
+                latest_races, _, _ = get_historical_races_by_page(page)
+                for race in latest_races:
+                    all_races.update({race['_id']: clean_race_data(race)})
+            return all_races
+
+    latest_races, num_total_races, _ = get_historical_races_by_page(1)
+    page_size = len(latest_races)
+
     num_pages = int(math.ceil((num_total_races / page_size)))
+
     for races, _, page_num in Pool(NUM_WORKERS).imap(
             get_historical_races_by_page, range(1, num_pages+1)):
         for race in races:
-            all_races.append(clean_race_data(race))
+            all_races.update({race['_id']: clean_race_data(race)})
     if os.path.exists('races.pickle'):
         shutil.copy('races.pickle', 'races.pickle.backup')
     with open('races.pickle', 'wb+') as outfile:
