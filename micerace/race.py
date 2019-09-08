@@ -1,7 +1,6 @@
 import json
-from pprint import pprint
 from collections import OrderedDict
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from micerace.mice import Mouse
 from micerace import util
@@ -13,7 +12,7 @@ class Race:
         self.log = kwargs['log']
         self.__v = kwargs['__v']
 
-        self.__event_starts_at = util.format_timestamp(kwargs.get('eventStart', None))
+        self._event_starts_at = util.format_timestamp(kwargs.get('eventStart', None))
         self.staging_at = util.format_timestamp(kwargs.get('staging', None))
         self.betting_opens_at = util.format_timestamp(kwargs.get('bettingOpens', None))
         self.starts_at = util.format_timestamp(kwargs.get('raceStarts', None))
@@ -22,7 +21,11 @@ class Race:
         self.cancelled = kwargs['raceCancelled']
 
         self.completed = True if self.completed_at and not self.reset and not self.cancelled else False
-        self.elapsed_time = (self.completed_at - self.starts_at).seconds if self.completed else None
+        if self.completed_at and self.starts_at:
+            delta = self.completed_at - self.starts_at
+            self.elapsed_time = delta.seconds + delta.microseconds/1000000
+        else:
+            self.elapsed_time = None
 
         self.mice_names = [name.lower() for name in kwargs['mice']]
         self.winner_name = kwargs.get('winnerName', None)
@@ -82,26 +85,26 @@ class StatsAgent:
             ('1h', timedelta(hours=1)),
             ('2h', timedelta(hours=2)),
             ('3h', timedelta(hours=3)),
-            ('5h', timedelta(hours=5)),
+            ('4h', timedelta(hours=5)),
             ('8h', timedelta(hours=8)),
-            ('10h', timedelta(hours=10)),
+            # ('10h', timedelta(hours=10)),
             ('12h', timedelta(hours=12)),
-            ('18h', timedelta(hours=18)),
+            #('18h', timedelta(hours=18)),
             ('24h', timedelta(hours=24)),
-            ('36h', timedelta(hours=36)),
+            #('36h', timedelta(hours=36)),
             ('2d', timedelta(days=2)),
             ('3d', timedelta(days=3)),
-            ('4d', timedelta(days=4)),
-            ('5d', timedelta(days=5)),
-            ('7d', timedelta(days=7)),
+            #('4d', timedelta(days=4)),
+            ('6d', timedelta(days=5)),
+            #('7d', timedelta(days=7)),
             ('10d', timedelta(days=10)),
-            ('15d', timedelta(days=15)),
+            # ('15d', timedelta(days=15)),
             ('30d', timedelta(days=30)),
-            ('45d', timedelta(days=45)),
-            ('60d', timedelta(days=60)),
+            # ('45d', timedelta(days=45)),
+            # ('60d', timedelta(days=60)),
             ('90d', timedelta(days=90)),
-            ('180d', timedelta(days=180)),
-            ('365d', timedelta(days=365)),
+            # ('180d', timedelta(days=180)),
+            # ('365d', timedelta(days=365)),
         ]
         if target_mice_names is None:
             target_mice_names = self.system.mice.keys()
@@ -112,13 +115,28 @@ class StatsAgent:
             mouse_stats = OrderedDict({
                 'name': mouse.name,
                 'site_rating': mouse.site_rating,
-                'win_ratio': mouse.lifetime_win_ratio,
+                #'age': f"{mouse.age}d",
+                'lifetime_win_ratio': mouse.lifetime_win_ratio,
+                'current_lane_vs_other_lanes': mouse.lane_win_ratios(),
+                'win_loss_current_lane': mouse.current_lane_total_win_ratio(),
+                '5_race_win_ratio': mouse.win_ratio_last_n_races(5),
+                '10_race_win_ratio': mouse.win_ratio_last_n_races(10),
+                '50_race_win_ratio': mouse.win_ratio_last_n_races(50),
             })
 
-            time_stats = OrderedDict({
-                interval_str: mouse.interval_stats(interval) for interval_str, interval in intervals})
+            for interval_str, interval in intervals:
+                mouse_stats.update({interval_str: mouse.interval_stats(interval)})
+            #for interval_str, interval in intervals:
+            #    for stat_name, val in mouse.interval_stats(interval).items():
+            #        mouse_stats.update({f'{interval_str}_{stat_name}': val})
 
-            mouse_stats.update(time_stats)
+            #for interval_str, interval in intervals:
+            #    mouse_stats.update({interval_str})
+
+            #time_stats = OrderedDict({
+            #    interval_str: mouse.interval_stats(interval) for interval_str, interval in intervals})
+
+            #mouse_stats.update(time_stats)
             mice_stats.append(mouse_stats)
 
         return sorted(mice_stats, key=lambda k: k['site_rating'], reverse=True)
@@ -126,7 +144,8 @@ class StatsAgent:
 
 if __name__ == '__main__':
     stats_agent = StatsAgent(use_cache=False)
-    stats = stats_agent.get_mice_stats()#['cheddar', 'robin', 'mickey', 'gold'])
+    #stats = stats_agent.get_mice_stats(['mario', 'bulp', 'fluffy', 'mama-mia'])
+    stats = stats_agent.get_mice_stats(stats_agent.system.races[0].mice_names)#['mario', 'bulp', 'fluffy', 'mama-mia'])
 
     print(json.dumps(stats, indent=2))
     with open('latest-stats.json', 'w+') as outfile:
