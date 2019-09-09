@@ -1,3 +1,4 @@
+import sys
 from enum import Enum
 from datetime import datetime
 from collections import OrderedDict
@@ -34,6 +35,11 @@ class Mouse:
         self.reset_races = []
         self.cancelled_races = []
 
+        self.max_repeat_wins = 0
+        self.average_repeat_wins = 0
+        self.median_repeat_wins = 0
+        self.current_repeat_wins = 0
+
         self.__validate_data_integrity()
 
     @property
@@ -53,7 +59,7 @@ class Mouse:
         if self.total_races_won + self.total_races_lost == 0:
             return 0.0
 
-        return round(self.total_races_won / float(self.total_races_lost), 4)
+        return round(self.total_races_won / float(self.total_races_won + self.total_races_lost), 4)
 
     @property
     def age(self):
@@ -120,7 +126,7 @@ class Mouse:
 
         return round(races_won / float(races_won + races_lost), 2)
 
-    def lane_win_ratios(self, time_delta=None):
+    def lane_win_vs_other_lane_ratio(self, time_delta=None):
         now = datetime.utcnow()
         if time_delta is None:
             max_race_age = datetime(year=2017, month=1, day=1)
@@ -131,8 +137,6 @@ class Mouse:
         for race in self.winning_races:
             if race.completed_at >= max_race_age:
                 lane_ctr[race.mice_names.index(self.name)] += 1
-
-
 
         ratios = {
             #'blue': round(lane_ctr[0] / float(sum(lane_ctr)), 2),
@@ -146,11 +150,11 @@ class Mouse:
             return 0.0
         current_race_lane = self.all_races[list(self.all_races.keys())[0]].mice_names.index(self.name)
         current_lane_ratio = round(lane_ctr[current_race_lane] / float(sum(lane_ctr)), 2)
+        return current_lane_ratio
         #ratios.update({'current_lane': round(lane_ctr[current_race_lane] / float(sum(lane_ctr)), 2)})
         #return ratios
-        return current_lane_ratio
 
-    def current_lane_total_win_ratio(self, time_delta=None):
+    def current_lane_total_win_ratio(self, time_delta=None, num_races=99999999):
         """In the current lane, what is the wins/total_races ratio?"""
         now = datetime.utcnow()
         if time_delta is None:
@@ -161,20 +165,21 @@ class Mouse:
         wins_in_lane = losses_in_lane = 0
         current_race_lane = self.all_races[list(self.all_races.keys())[0]].mice_names.index(self.name)
 
-        for race in self.winning_races + self.losing_races:
-            if race.completed_at >= max_race_age:
+        for race in self.completed_races:
+            if num_races == 0:
+                break
+            if race.completed_at >= max_race_age and race.winner_name is not None:
                 if race.mice_names.index(self.name) == current_race_lane:
                     if race.winner_name == self.name:
                         wins_in_lane += 1
                     else:
                         losses_in_lane += 1
+            num_races -= 1
 
         if wins_in_lane + losses_in_lane == 0:
-            return 0.0
+            return None
 
         return round(wins_in_lane / float(losses_in_lane + wins_in_lane), 2)
-
-
 
     def win_ratio_since(self, time_delta):
         now = datetime.utcnow()
@@ -216,21 +221,75 @@ class Mouse:
         # TODO / NOTE removing None values for human-readability
         return {k: v for k, v in stats.items() if v is not None}
 
+    def repeat_wins(self, time_delta=None):
+        now = datetime.utcnow()
+        if time_delta is None:
+            max_race_age = datetime(year=2017, month=1, day=1)
+        else:
+            max_race_age = now - time_delta
+
+        curr_repeat_wins = 0
+        repeat_win_ctr = 0
+        repeat_win_counts = []
+        races_lost = 0
+
+        for ctr, race in enumerate(self.completed_races):
+            if race.completed_at >= max_race_age and race.winner_name is not None:
+                if race.winner_name == self.name:
+                    repeat_win_ctr += 1
+                    if races_lost == 0:
+                        curr_repeat_wins += 1
+                # If mouse lost
+                else:
+                    # If mouse on a repeat win streak, reset repeat wins and add repeat win count to the list.
+                    if repeat_win_ctr > 0:
+                        repeat_win_counts.append(repeat_win_ctr)
+                        repeat_win_ctr = 0
+                    races_lost += 1
+        else:
+            if repeat_win_ctr > 0:
+                repeat_win_counts.append(repeat_win_ctr)
+
+        if not len(repeat_win_counts):
+            average_repeat_wins = 0.0
+            median_repeat_wins = 0.0
+            max_repeat_wins = 0
+        else:
+            average_repeat_wins = round(sum(repeat_win_counts) / float(len(repeat_win_counts)), 2)
+            median_repeat_wins = round(statistics.median(repeat_win_counts), 2)
+            max_repeat_wins = max(repeat_win_counts)
+
+        # Add global stats (all races) to the mouse
+        if time_delta is None:
+            self.current_repeat_wins = curr_repeat_wins
+            self.average_repeat_wins = average_repeat_wins
+            self.median_repeat_wins = median_repeat_wins
+            self.max_repeat_wins = max_repeat_wins
+
+        return {
+            'avg_repeat_w': average_repeat_wins,
+            'median_repeat_w': median_repeat_wins,
+            'max_repeat_w': max_repeat_wins,
+        }
+
+    def populate_global_stats(self):
+        self.repeat_wins()
+
     def interval_stats(self, time_delta):
         win_ratio, races_won, races_lost = self.win_ratio_since(time_delta)
         stats = {
             'win_ratio': win_ratio,
-            'win/total': f'{races_won}/{races_won + races_lost}' if races_lost > 0 else 0,
+            'win/total': f'{races_won}/{races_won + races_lost}' if races_lost + races_won > 0 else 0,
             'win_loss_current_lane': self.current_lane_total_win_ratio(time_delta),
-
-            #'lane_stats': self.lane_win_ratios(time_delta=time_delta),
-            **self.win_times_since(time_delta)
+            **self.repeat_wins(time_delta),
+            **self.win_times_since(time_delta),
+            # 'lane_stats': self.lane_win_ratios(time_delta=time_delta),
         }
 
-        # Filter out zero values
+        # Filter out zero values, except the ones we want.
         stats = {
             k: v for k, v in stats.items()
-            if (isinstance(v, int) or isinstance(v, float) and v > 0) or isinstance(v, str) or k == 'win_loss_current_lane'}
+            if (isinstance(v, int) or isinstance(v, float) and v > 0) or isinstance(v, str) or k == 'win_loss_current_lane' or k == 'win_ratio'}
 
         return str(stats)
 
