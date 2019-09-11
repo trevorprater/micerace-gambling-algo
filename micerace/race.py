@@ -1,4 +1,6 @@
+import sys
 import json
+from csv import DictWriter
 from collections import OrderedDict, defaultdict
 from datetime import timedelta
 
@@ -65,7 +67,7 @@ class MiceRaceSystem:
         # we must associate it to four different mice (Mouse objects).
         self.mice = MouseKeeper({mouse['name']: Mouse(**mouse) for mouse in self.mice_metadata})
         self.races = []
-        for race_meta in util.get_all_races(use_cache=self.use_cache, num_refresh_pages=self.num_refresh_pages):
+        for race_meta in sorted(util.get_all_races(use_cache=self.use_cache, num_refresh_pages=self.num_refresh_pages)):
             race = Race(**race_meta)
             self.races.append(race)
             for mouse_name in race.mice_names:
@@ -75,10 +77,76 @@ class MiceRaceSystem:
                     self.mice[mouse_name].add_race(race)
 
 
+class HistoricalMiceRaceSystem:
+    def __init__(self, num_primer_races, **kwargs):
+        self.mice_metadata = util.get_mice_data()
+        self.mice = MouseKeeper({mouse['name']: Mouse(**mouse) for mouse in self.mice_metadata})
+        self.dead_mice = set()
+        self._true_races = [Race(**race_meta) for race_meta in
+                            util.get_all_races(use_cache=True, num_refresh_pages=10)]
+        self._true_races = [r for r in self._true_races if r.completed_at and r.winner_name and len(r.winner_name) and not any(mn for mn in r.mice_names if mn in self.dead_mice)]
+        self._true_races.sort(key=lambda r: r.completed_at)
+
+        self.num_primer_races = num_primer_races
+        self.current_race_offset = 0
+        self.races = []
+
+        while self.current_race_offset < self.num_primer_races:
+            self.ingest_new_race()
+
+    def ingest_new_race(self):
+        self.races.append(self._true_races[self.current_race_offset])
+        self.current_race_offset += 1
+        for mouse_name in self.races[-1].mice_names:
+            if mouse_name not in self.mice:
+                self.dead_mice.add(mouse_name)
+            else:
+                self.mice[mouse_name].add_race(self.races[-1])
+
+    @property
+    def num_actual_races(self):
+        return len(self._true_races)
+
+    @property
+    def latest_race(self):
+        return self.races[-1]
+
+
 class StatsAgent:
-    def __init__(self, use_cache=False, num_refresh_pages=10, **kwargs):
-        self.system = MiceRaceSystem(
-            use_cache=use_cache, num_refresh_pages=num_refresh_pages, **kwargs)
+    def __init__(self, use_cache=False, num_refresh_pages=10, num_primer_races=500, **kwargs):
+        self.system = HistoricalMiceRaceSystem(use_cache=True, num_refresh_pages=10, num_primer_races=num_primer_races)
+        self.num_primer_races = num_primer_races
+
+        #self.system = MiceRaceSystem(
+        #    use_cache=use_cache, num_refresh_pages=num_refresh_pages, **kwargs)
+
+    def build_training_data(self):
+        csv_headers_written = False
+
+        with open('training_data_full.csv', 'w+') as csv_out:
+            dw = DictWriter(csv_out, fieldnames=[])
+            all_stats = []
+            for ctr in range(self.num_primer_races, self.system.num_actual_races):
+                if ctr % 100 == 0:
+                    print(f'processed {ctr} races')
+                if not any(mn for mn in self.system.latest_race.mice_names if mn in self.system.dead_mice):
+                    output_dict = OrderedDict()
+                    race_stats = self.get_mice_stats(self.system.latest_race.mice_names)
+                    for mouse_num, mouse_stats in enumerate(race_stats):
+                        for ctr, kv in enumerate(mouse_stats.items()):
+                            k, v = kv
+                            output_dict[f"mouse_{mouse_num}_{k}"] = v
+                    if not csv_headers_written:
+                        dw.fieldnames = list(output_dict.keys())
+                        dw.writeheader()
+                        dw.writerow(output_dict)
+                        csv_headers_written = True
+                        all_stats.append(output_dict)
+                    else:
+                        all_stats.append(output_dict)
+                        dw.writerow(output_dict)
+
+                self.system.ingest_new_race()
 
     def lane_win_ratios(self):
         races_by_lane = defaultdict(int)
@@ -95,7 +163,6 @@ class StatsAgent:
 
         races_by_lane = {k: round(v/float(sum(races_by_lane.values())), 5) for k, v in races_by_lane.items()}
         return races_by_lane
-
 
     def get_mice_stats(self, target_mice_names=None):
         intervals = [
@@ -124,9 +191,10 @@ class StatsAgent:
 
             mouse_stats = OrderedDict({
                 'name': mouse.name,
+                'name_id': mouse.name_id,
                 'site_rating': mouse.site_rating,
                 'lifetime_win_ratio': mouse.lifetime_win_ratio,
-                'wins_in_lane_vs_others': mouse.lane_win_vs_other_lane_ratio(),
+                **mouse.lane_win_vs_other_lane_ratio(),
                 'win_loss_current_lane': mouse.current_lane_total_win_ratio(),
                 'curr_repeat_wins': mouse.current_repeat_wins,
                 'average_repeat_wins': mouse.average_repeat_wins,
@@ -146,7 +214,15 @@ class StatsAgent:
             })
 
             for interval_str, interval in intervals:
-                mouse_stats.update({interval_str: mouse.interval_stats(interval)})
+                interval_stats = mouse.interval_stats(interval)
+                lane_win_ratio_vs_others = interval_stats.pop('lane_win_ratio_vs_others')
+                for k, v in interval_stats.items():
+                    mouse_stats.update({f'{interval_str}_{k}': v})
+                for k, v in lane_win_ratio_vs_others.items():
+                    mouse_stats.update({f'{interval_str}_{k}': v})
+
+
+                #mouse_stats.update({interval_str: mouse.interval_stats(interval)})
 
             mouse_stats.update(self.lane_win_ratios())
 
@@ -157,7 +233,8 @@ class StatsAgent:
 
 if __name__ == '__main__':
     stats_agent = StatsAgent(use_cache=False)
-    stats = stats_agent.get_mice_stats(stats_agent.system.races[0].mice_names)
-    print(json.dumps(stats, indent=2))
-    with open('latest-stats.json', 'w+') as outfile:
-        outfile.write(json.dumps(stats, indent=2))
+    stats_agent.build_training_data()
+    # stats = stats_agent.get_mice_stats(stats_agent.system.races[0].mice_names)
+    # print(json.dumps(stats, indent=2))
+    # with open('latest-stats.json', 'w+') as outfile:
+    #     outfile.write(json.dumps(stats, indent=2))
