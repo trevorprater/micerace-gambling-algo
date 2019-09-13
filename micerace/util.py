@@ -1,12 +1,11 @@
 import os
 import pickle
-import shutil
 import json
 import sys
 import logging
 import math
+from enum import Enum
 from datetime import datetime
-from collections import OrderedDict
 from multiprocessing import Pool
 from random import randint
 
@@ -33,6 +32,59 @@ class NoMoreRacesException(Exception):
 def format_timestamp(ts):
     if ts is not None:
         return datetime.strptime(ts[:-1] + '000', '%Y-%m-%dT%H:%M:%S.%f')
+
+
+class MouseColors(Enum):
+    brown = 1
+    black = 2
+    grey = 3
+    gray = 3
+    yellow = 4
+    white = 5
+    orange = 6
+    silver = 7
+    red = 8
+
+
+class MouseNames(Enum):
+    mario = 0
+    gold = 1
+    bulp = 2
+    toast = 3
+    scratch = 4
+    mickey = 5
+    robin = 6
+    zeus = 7
+    ester = 8
+    bubu = 9
+    greg = 10
+    vinnie = 11
+    cheddar = 12
+    desperaux = 13
+    fluffy = 14
+    levi = 15
+    nibbles = 16
+    flamengo = 17
+    bella = 18
+    dagi = 19
+    minnie = 20
+    mama_mia = 21
+    merlin = 22
+    silver = 23
+    york = 24
+    scruffy = 25
+    barbie = 26
+    papa_grey = 27
+    whiskers = 28
+    coco = 29
+    fortuna = 30
+    snow = 31
+    laila = 32
+    hamish = 33
+    mione = 34
+    catnip = 35
+    squeak = 36
+
 
 
 # TODO CACHING

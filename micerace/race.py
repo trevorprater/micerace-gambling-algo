@@ -1,5 +1,6 @@
 import sys
 import json
+from datetime import datetime
 from csv import DictWriter
 from collections import OrderedDict, defaultdict
 from datetime import timedelta
@@ -18,6 +19,7 @@ class Race:
         self.staging_at = util.format_timestamp(kwargs.get('staging', None))
         self.betting_opens_at = util.format_timestamp(kwargs.get('bettingOpens', None))
         self.starts_at = util.format_timestamp(kwargs.get('raceStarts', None))
+
         self.completed_at = util.format_timestamp(kwargs.get('raceComplete', None))
         self.reset = kwargs['raceIsReset']
         self.cancelled = kwargs['raceCancelled']
@@ -29,10 +31,12 @@ class Race:
         else:
             self.elapsed_time = None
 
-        self.mice_names = [name.lower() for name in kwargs['mice']]
+        self.mice_names = [name.lower().replace('-', '_') for name in kwargs['mice']]
         self.winner_name = kwargs.get('winnerName', None)
         if self.winner_name is not None:
-            self.winner_name = self.winner_name.lower()
+            self.winner_name = self.winner_name.lower().replace('-', '_')
+            self.winner_name_id = getattr(util.MouseNames, self.winner_name).value
+            self.winner_position_ndx = self.mice_names.index(self.winner_name)
 
         self.runner_up_name = kwargs.get('runnerUpName', None)
         if isinstance(self.runner_up_name, str):
@@ -60,7 +64,7 @@ class MiceRaceSystem:
         self.dead_mice = set()
 
         # Get the races
-        self.target_mice_names = target_mice_names
+        self.target_mice_names = [name.replace('-', '_') for name in target_mice_names]
         self.mice_metadata = util.get_mice_data()
 
         # Create a reverse lookup table that allows us to quickly find a mouse by name, because for each race,
@@ -123,7 +127,7 @@ class StatsAgent:
     def build_training_data(self):
         csv_headers_written = False
 
-        with open('training_data_full.csv', 'w+') as csv_out:
+        with open(f'training_data_full.{datetime.now()}.csv', 'w+') as csv_out:
             dw = DictWriter(csv_out, fieldnames=[])
             all_stats = []
             for ctr in range(self.num_primer_races, self.system.num_actual_races):
@@ -132,10 +136,24 @@ class StatsAgent:
                 if not any(mn for mn in self.system.latest_race.mice_names if mn in self.system.dead_mice):
                     output_dict = OrderedDict()
                     race_stats = self.get_mice_stats(self.system.latest_race.mice_names)
+
+                    output_dict['mice'] = self.system.latest_race.mice_names
+                    output_dict['winner_name'] = self.system.latest_race.winner_name
+                    output_dict['winner_name_id'] = self.system.latest_race.winner_name_id
+                    output_dict['winner_position_ndx'] = self.system.latest_race.winner_position_ndx
+                    output_dict['race_id'] = self.system.latest_race.id
+
+                    output_dict['completed_at_year'] = self.system.latest_race.completed_at.year
+                    output_dict['completed_at_month'] = self.system.latest_race.completed_at.month
+                    output_dict['completed_at_day'] = self.system.latest_race.completed_at.day
+                    output_dict['completed_at_weekday'] = self.system.latest_race.completed_at.weekday()
+                    output_dict['completed_at_hour'] = self.system.latest_race.completed_at.hour
+                    output_dict['completed_at_minute'] = self.system.latest_race.completed_at.minute
+
                     for mouse_num, mouse_stats in enumerate(race_stats):
-                        for ctr, kv in enumerate(mouse_stats.items()):
-                            k, v = kv
+                        for k, v in mouse_stats.items():
                             output_dict[f"mouse_{mouse_num}_{k}"] = v
+
                     if not csv_headers_written:
                         dw.fieldnames = list(output_dict.keys())
                         dw.writeheader()

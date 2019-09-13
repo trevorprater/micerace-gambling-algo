@@ -1,57 +1,13 @@
-import sys
-from enum import Enum
-from datetime import datetime
-from collections import OrderedDict
 import statistics
+from datetime import datetime
 
-
-class MouseColors(Enum):
-    brown = 1
-    black = 2
-    grey = 3
-    gray = 3
-    yellow = 4
-    white = 5
-    orange = 6
-    silver = 7
-    red = 8
-
-
-class MouseNames(Enum):
-    mario = 0
-    gold = 1
-    bulp = 2
-    toast = 3
-    scratch = 4
-    mickey = 5
-    robin = 6
-    zeus = 7
-    ester = 8
-    bubu = 9
-    greg = 10
-    vinnie = 11
-    cheddar = 12
-    desperaux = 13
-    fluffy = 14
-    levi = 15
-    nibbles = 16
-    flamengo = 17
-    bella = 18
-    dagi = 19
-    minnie = 20
-    mama_mia = 21
-    merlin = 22
-    silver = 23
-    york = 24
-    scruffy = 25
-    barbie = 26
-    papa_grey = 27
+from .util import MouseNames, MouseColors
 
 
 class Mouse:
     def __init__(self, **kwargs):
-        self.name = kwargs['name'].lower()
-        self.name_id = getattr(MouseNames, self.name.replace('-', '_')).value
+        self.name = kwargs['name'].lower().replace('-', '_')
+        self.name_id = getattr(MouseNames, self.name).value
         self.family = int(kwargs['family'])
         self.site_rating = kwargs['rating']
         self.color = kwargs['color'].lower()
@@ -90,7 +46,7 @@ class Mouse:
         if self.total_races_won + self.total_races_lost == 0:
             return 0.0
 
-        return round(self.total_races_won / float(self.total_races_won + self.total_races_lost), 4)
+        return self.total_races_won / float(self.total_races_won + self.total_races_lost)
 
     @property
     def age(self):
@@ -134,7 +90,7 @@ class Mouse:
                     races_lost += 1
             n -= 1
 
-        return round(races_won / float(races_won + races_lost), 2)
+        return races_won / float(races_won + races_lost)
 
     def lane_win_vs_other_lane_ratio(self, time_delta=None):
         now = self.all_races[-1]._event_starts_at
@@ -149,17 +105,13 @@ class Mouse:
                 lane_ctr[race.mice_names.index(self.name)] += 1
 
         ratios = {
-            'blue_lane_ratio': round(lane_ctr[0] / float(max(sum(lane_ctr), 1)), 2),
-            'red_lane_ratio': round(lane_ctr[1] / float(max(sum(lane_ctr), 1)), 2),
-            'green_lane_ratio': round(lane_ctr[2] / float(max(sum(lane_ctr), 1)), 2),
-            'yellow_lane_ratio': round(lane_ctr[3] / float(max(sum(lane_ctr), 1)), 2),
+            'blue_lane_ratio': lane_ctr[0] / float(max(sum(lane_ctr), 1)),
+            'red_lane_ratio': lane_ctr[1] / float(max(sum(lane_ctr), 1)),
+            'green_lane_ratio': lane_ctr[2] / float(max(sum(lane_ctr), 1)),
+            'yellow_lane_ratio': lane_ctr[3] / float(max(sum(lane_ctr), 1)),
         }
         current_race_lane = self.all_races[-1].mice_names.index(self.name)
-        ratios.update({'current_lane_ratio': round(lane_ctr[current_race_lane] / float(max(sum(lane_ctr), 1)), 2)})
-        #current_lane_ratio = round(lane_ctr[current_race_lane] / float(sum(lane_ctr)), 2)
-
-        #return current_lane_ratio
-        #ratios.update({'current_lane': round(lane_ctr[current_race_lane] / float(sum(lane_ctr)), 2)})
+        ratios.update({'current_lane_ratio': lane_ctr[current_race_lane] / float(max(sum(lane_ctr), 1))})
         return ratios
 
     def current_lane_total_win_ratio(self, time_delta=None, num_races=99999999):
@@ -187,7 +139,7 @@ class Mouse:
         if wins_in_lane + losses_in_lane == 0:
             return 0.0
 
-        return round(wins_in_lane / float(losses_in_lane + wins_in_lane), 2)
+        return wins_in_lane / float(losses_in_lane + wins_in_lane)
 
     def win_ratio_since(self, time_delta):
         now = self.all_races[-1]._event_starts_at
@@ -206,7 +158,7 @@ class Mouse:
         if races_won == 0:
             return 0.0, races_won, races_lost
 
-        ratio = round(races_won / float(races_won+races_lost), 2)
+        ratio = races_won / float(races_won+races_lost)
 
         return ratio, races_won, races_lost
 
@@ -260,10 +212,10 @@ class Mouse:
         if not len(repeat_win_counts):
             average_repeat_wins = 0.0
             median_repeat_wins = 0.0
-            max_repeat_wins = 0
+            max_repeat_wins = 0.0
         else:
-            average_repeat_wins = round(sum(repeat_win_counts) / float(len(repeat_win_counts)), 2)
-            median_repeat_wins = round(statistics.median(repeat_win_counts), 2)
+            average_repeat_wins = sum(repeat_win_counts) / float(len(repeat_win_counts))
+            median_repeat_wins = statistics.median(repeat_win_counts)
             max_repeat_wins = max(repeat_win_counts)
 
         # Add global stats (all races) to the mouse
@@ -290,7 +242,6 @@ class Mouse:
             'win_ratio': win_ratio,
             'wins': races_won,
             'losses': races_lost,
-            #'win/total': f'{races_won}/{races_won + races_lost}' if races_lost + races_won > 0 else 0,
             'win_loss_current_lane': self.current_lane_total_win_ratio(time_delta),
             **self.repeat_wins(time_delta),
             **self.win_times_since(time_delta),
