@@ -1,12 +1,21 @@
 import sys
+import random
+import shutil
 import json
 from datetime import datetime
 from csv import DictWriter
 from collections import OrderedDict, defaultdict
 from datetime import timedelta
+from lazy import lazy
+
+import numpy as np
+import pandas as pd
+from tensorflow.keras.models import load_model
 
 from micerace.mice import Mouse
 from micerace import util
+
+NUM_SKIP_INITIAL_RACES = 1000
 
 
 class Race:
@@ -69,9 +78,14 @@ class MiceRaceSystem:
 
         # Create a reverse lookup table that allows us to quickly find a mouse by name, because for each race,
         # we must associate it to four different mice (Mouse objects).
-        self.mice = MouseKeeper({mouse['name']: Mouse(**mouse) for mouse in self.mice_metadata})
+        self.mice = MouseKeeper({mouse['name'].replace('-', '_'): Mouse(**mouse) for mouse in self.mice_metadata})
         self.races = []
-        for race_meta in sorted(util.get_all_races(use_cache=self.use_cache, num_refresh_pages=self.num_refresh_pages)):
+        http_races = util.get_all_races(use_cache=self.use_cache, num_refresh_pages=self.num_refresh_pages)
+        http_races.reverse()
+        # TODO: ADD BACK!!!!
+        rand_back_ndx = len(http_races)-random.randint(1, 20)
+        for race_meta in http_races[NUM_SKIP_INITIAL_RACES:]:
+        #for race_meta in http_races[NUM_SKIP_INITIAL_RACES:rand_back_ndx]:
             race = Race(**race_meta)
             self.races.append(race)
             for mouse_name in race.mice_names:
@@ -80,6 +94,14 @@ class MiceRaceSystem:
                 else:
                     self.mice[mouse_name].add_race(race)
 
+    @property
+    def num_actual_races(self):
+        return len(self.races)
+
+    @property
+    def latest_race(self):
+        return self.races[-1]
+
 
 class HistoricalMiceRaceSystem:
     def __init__(self, num_primer_races, **kwargs):
@@ -87,7 +109,7 @@ class HistoricalMiceRaceSystem:
         self.mice = MouseKeeper({mouse['name']: Mouse(**mouse) for mouse in self.mice_metadata})
         self.dead_mice = set()
         self._true_races = [Race(**race_meta) for race_meta in
-                            util.get_all_races(use_cache=True, num_refresh_pages=10)]
+                            util.get_all_races(use_cache=False, num_refresh_pages=100)]
         self._true_races = [r for r in self._true_races if r.completed_at and r.winner_name and len(r.winner_name) and not any(mn for mn in r.mice_names if mn in self.dead_mice)]
         self._true_races.sort(key=lambda r: r.completed_at)
 
@@ -115,19 +137,86 @@ class HistoricalMiceRaceSystem:
     def latest_race(self):
         return self.races[-1]
 
+    @property
+    def previous_race(self):
+        return self.races[-2]
+
 
 class StatsAgent:
-    def __init__(self, use_cache=False, num_refresh_pages=10, num_primer_races=500, **kwargs):
-        self.system = HistoricalMiceRaceSystem(use_cache=True, num_refresh_pages=10, num_primer_races=num_primer_races)
-        self.num_primer_races = num_primer_races
+    def __init__(self,
+                 use_cache=False,
+                 num_refresh_pages=1,
+                 training=False,
+                 num_primer_races=NUM_SKIP_INITIAL_RACES, **kwargs):
 
-        #self.system = MiceRaceSystem(
-        #    use_cache=use_cache, num_refresh_pages=num_refresh_pages, **kwargs)
+        if training:
+            self.system = HistoricalMiceRaceSystem(
+                use_cache=use_cache, num_refresh_pages=num_refresh_pages, num_primer_races=num_primer_races)
+        else:
+            self.system = MiceRaceSystem(
+                use_cache=use_cache, num_refresh_pages=num_refresh_pages, target_mice_names=[], **kwargs)
+
+        self.num_primer_races = num_primer_races
+        #TODO: ADD BACK#self.model = load_model('models/model-latest.h5')
+        self.model = load_model('models/first-working-model.h5')
+
+    def predict_current_race(self):
+        output_dict = OrderedDict()
+        race_stats = self.get_mice_stats(self.system.latest_race.mice_names)
+
+        now = datetime.utcnow()
+        output_dict['completed_at_year'] = getattr(self.system.latest_race.completed_at, 'year', now.year)
+        output_dict['completed_at_month'] = getattr(self.system.latest_race.completed_at, 'month', now.month)
+        output_dict['completed_at_day'] = getattr(self.system.latest_race.completed_at, 'day', now.day)
+        if hasattr(self.system.latest_race.completed_at, 'weekday'):
+            output_dict['completed_at_weekday'] = self.system.latest_race.completed_at.weekday()
+        else:
+            output_dict['completed_at_weekday'] = now.weekday()
+
+        output_dict['completed_at_hour'] = getattr(self.system.latest_race.completed_at, 'hour', now.hour)
+        output_dict['completed_at_minute'] = getattr(self.system.latest_race.completed_at, 'minute', now.minute)
+
+        for mouse_num, mouse_stats in enumerate(race_stats):
+            for k, v in mouse_stats.items():
+                output_dict[f"mouse_{mouse_num}_{k}"] = v
+
+        # this is only used to mimic the training functionality, list of dicts, but this time only one dict.
+        all_stats = [output_dict]
+        df = pd.DataFrame(all_stats).fillna(value=0)
+        names_1 =\
+            [list(df['mouse_0_name'])[0],
+             list(df['mouse_1_name'])[0],
+             list(df['mouse_2_name'])[0],
+             list(df['mouse_3_name'])[0]]
+
+        df = df.drop(
+            columns=['mouse_0_name',
+                     'mouse_1_name',
+                     'mouse_2_name',
+                     'mouse_3_name'])
+
+        race_stats_np_arr = df.to_numpy(dtype=float)
+        race_stats_np_arr = np.expand_dims(race_stats_np_arr, axis=2)
+
+        predict = self.model.predict(race_stats_np_arr, verbose=0)
+        print('old model:', dict(zip(self.system.latest_race.mice_names, [round(p, 2) for p in predict[0]])))
+
+        new_model = load_model('models/model-backup-8.h5')
+        predict = new_model.predict(race_stats_np_arr, verbose=0)
+        print('80-20 model:', dict(zip(self.system.latest_race.mice_names, [round(p, 2) for p in predict[0]])))
+
+        new_model = load_model('models/model-latest.h5')
+        predict = new_model.predict(race_stats_np_arr, verbose=0)
+        print('99-1 model:', dict(zip(self.system.latest_race.mice_names, [round(p, 2) for p in predict[0]])))
+        if self.system.latest_race.completed:
+            print(self.system.latest_race.winner_name, self.system.latest_race.winner_position_ndx)
+
 
     def build_training_data(self):
         csv_headers_written = False
 
-        with open(f'training_data_full.{datetime.now()}.csv', 'w+') as csv_out:
+        shutil.copy('training_data/training-latest.csv', 'training_data/training-data-backup.csv')
+        with open(f'training_data/training-latest.csv', 'w+') as csv_out:
             dw = DictWriter(csv_out, fieldnames=[])
             all_stats = []
             for ctr in range(self.num_primer_races, self.system.num_actual_races):
@@ -239,7 +328,6 @@ class StatsAgent:
                 for k, v in lane_win_ratio_vs_others.items():
                     mouse_stats.update({f'{interval_str}_{k}': v})
 
-
                 #mouse_stats.update({interval_str: mouse.interval_stats(interval)})
 
             mouse_stats.update(self.lane_win_ratios())
@@ -249,10 +337,29 @@ class StatsAgent:
         return sorted(mice_stats, key=lambda k: k['site_rating'], reverse=True)
 
 
-if __name__ == '__main__':
-    stats_agent = StatsAgent(use_cache=False)
+def predict_current_race():
+    stats_agent = StatsAgent(
+        use_cache=True, training=False, num_refresh_pages=10, num_primer_races=NUM_SKIP_INITIAL_RACES)
+    stats_agent.predict_current_race()
+
+
+def build_training_data():
+    stats_agent = StatsAgent(use_cache=False, training=True, num_primer_races=NUM_SKIP_INITIAL_RACES)
     stats_agent.build_training_data()
-    # stats = stats_agent.get_mice_stats(stats_agent.system.races[0].mice_names)
-    # print(json.dumps(stats, indent=2))
-    # with open('latest-stats.json', 'w+') as outfile:
-    #     outfile.write(json.dumps(stats, indent=2))
+
+
+def eyeball_current_race_stats():
+    stats_agent = StatsAgent(use_cache=True, training=False, num_primer_races=NUM_SKIP_INITIAL_RACES)
+    stats = stats_agent.get_mice_stats(stats_agent.system.races[0].mice_names)
+    print(json.dumps(stats, indent=2))
+    with open('latest-stats.json', 'w+') as outfile:
+        outfile.write(json.dumps(stats, indent=2))
+
+
+if __name__ == '__main__':
+    predict_current_race()
+    #build_training_data()
+    #eyeball_current_race_stats()
+
+
+

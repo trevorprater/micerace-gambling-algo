@@ -102,7 +102,7 @@ def get_all_races(use_cache, num_refresh_pages=5):
 
     num_races_seen = 0
     if use_cache:
-        all_races = pickle.load(open('races.pickle', 'rb'))
+        all_races = pickle.load(open('pickles/races.pickle', 'rb'))
         for page_num in range(num_refresh_pages):
             races, _, _ = _get_historical_races_by_page(page_num)
             for race in races:
@@ -122,10 +122,10 @@ def get_all_races(use_cache, num_refresh_pages=5):
 
     # Keep a backup ~5% of the time.
     if randint(1, 20) == 5:
-        with open('races-{}.pickle'.format(datetime.utcnow()), 'wb+') as outfile:
+        with open('pickles/races-{}.pickle'.format(datetime.strftime(datetime.utcnow(), '%Y-%m-%d-%H-%M-%S')), 'wb+') as outfile:
             pickle.dump(all_races, outfile)
 
-    with open('races.pickle', 'wb+') as outfile:
+    with open('pickles/races.pickle', 'wb+') as outfile:
         pickle.dump(all_races, outfile)
 
     return sorted(all_races.values(), key=lambda r: r['eventStart'], reverse=True)
