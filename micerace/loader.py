@@ -1,3 +1,4 @@
+import sys
 import numpy as np
 import pandas as pd
 from tensorflow.keras.models import Sequential
@@ -43,3 +44,4 @@ model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accur
 
 model.fit(x_train, y_train, batch_size=32, epochs=50, validation_data=(x_test, y_test), shuffle=True)
 model.save(f'model-{datetime.utcnow()}.h5')
+model.save('model-latest.h5')
