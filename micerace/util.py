@@ -1,13 +1,13 @@
 import os
 import pickle
-import shutil
 import json
 import sys
 import logging
 import math
+from enum import Enum
 from datetime import datetime
-from collections import OrderedDict
 from multiprocessing import Pool
+from random import randint
 
 from retry import retry
 import requests
@@ -34,9 +34,62 @@ def format_timestamp(ts):
         return datetime.strptime(ts[:-1] + '000', '%Y-%m-%dT%H:%M:%S.%f')
 
 
+class MouseColors(Enum):
+    brown = 1
+    black = 2
+    grey = 3
+    gray = 3
+    yellow = 4
+    white = 5
+    orange = 6
+    silver = 7
+    red = 8
+
+
+class MouseNames(Enum):
+    mario = 0
+    gold = 1
+    bulp = 2
+    toast = 3
+    scratch = 4
+    mickey = 5
+    robin = 6
+    zeus = 7
+    ester = 8
+    bubu = 9
+    greg = 10
+    vinnie = 11
+    cheddar = 12
+    desperaux = 13
+    fluffy = 14
+    levi = 15
+    nibbles = 16
+    flamengo = 17
+    bella = 18
+    dagi = 19
+    minnie = 20
+    mama_mia = 21
+    merlin = 22
+    silver = 23
+    york = 24
+    scruffy = 25
+    barbie = 26
+    papa_grey = 27
+    whiskers = 28
+    coco = 29
+    fortuna = 30
+    snow = 31
+    laila = 32
+    hamish = 33
+    mione = 34
+    catnip = 35
+    squeak = 36
+
+
+
 # TODO CACHING
 @retry(requests.RequestException, tries=3, delay=1, backoff=1, jitter=1)
-def get_all_races(use_cache, num_refresh_pages):
+def get_all_races(use_cache, num_refresh_pages=5):
     all_races = {}
     # Get the total number of races the site contains.
     latest_races, num_total_races, _ = _get_historical_races_by_page(1)
@@ -47,50 +100,73 @@ def get_all_races(use_cache, num_refresh_pages):
     # Derive the number of pages of data:
     num_pages = int(math.ceil((num_total_races / page_size)))
 
-    # For each page, collect the race data from the HTTP endpoint:
-    for races, _, page_num in Pool(NUM_HTTP_WORKERS).imap(_get_historical_races_by_page, range(1, num_pages+1)):
-        for race in races:
-            all_races.update({race['_id']: race})
+    num_races_seen = 0
+    if use_cache:
+        all_races = pickle.load(open('pickles/races.pickle', 'rb'))
+        for page_num in range(num_refresh_pages):
+            races, _, _ = _get_historical_races_by_page(page_num)
+            for race in races:
+
+                if race['_id'] in all_races:
+                    num_races_seen += 1
+                all_races.update({race['_id']: race})
+
+            if num_races_seen >= page_size:
+                break
+
+    else:
+        # For each page, collect the race data from the HTTP endpoint:
+        for races, _, page_num in Pool(NUM_HTTP_WORKERS).imap(_get_historical_races_by_page, range(1, num_pages+1)):
+            for race in races:
+                all_races.update({race['_id']: race})
+
+    # Keep a backup ~5% of the time.
+    if randint(1, 20) == 5:
+        with open('pickles/races-{}.pickle'.format(datetime.strftime(datetime.utcnow(), '%Y-%m-%d-%H-%M-%S')), 'wb+') as outfile:
+            pickle.dump(all_races, outfile)
+
+    with open('pickles/races.pickle', 'wb+') as outfile:
+        pickle.dump(all_races, outfile)
 
     return sorted(all_races.values(), key=lambda r: r['eventStart'], reverse=True)
 
 
-@retry(requests.RequestException, tries=3, delay=1, backoff=1, jitter=1)
-def get_historical_races(use_cache=False, num_refresh_pages=5):
-    all_races = OrderedDict()
-
-    # # If we are using the cache, only request `num_refresh_pages` from the server, then return the updated cache.
-    # if use_cache:
-    #     with open('races.pickle', 'rb') as infile:
-    #         all_races.update(pickle.load(infile))
-    #         for page in range(1, num_refresh_pages+1):
-    #             latest_races, _, _ = _get_historical_races_by_page(page)
-    #             for race in latest_races:
-    #                 all_races.update({race['_id']: clean_race_data(race)})
-    #         return all_races
-
-    # Get the total number of races the site contains.
-    latest_races, num_total_races, _ = _get_historical_races_by_page(1)
-
-    # Get the number of races contained in a page.
-    page_size = len(latest_races)
-
-    # Derive the number of pages of data:
-    num_pages = int(math.ceil((num_total_races / page_size)))
-
-    # For each page, collect the race data from the HTTP endpoint:
-    for races, _, page_num in Pool(NUM_HTTP_WORKERS).imap(_get_historical_races_by_page, range(1, num_pages+1)):
-        for race in races:
-            all_races.update({race['_id']: clean_race_data(race)})
-
-    # Write fresh data to the cache.
-    if os.path.exists('races.pickle'):
-        shutil.copy('races.pickle', 'races.pickle.backup')
-
-    with open('races.pickle', 'wb+') as outfile:
-        pickle.dump(all_races, outfile)
-
-    return all_races
+# @retry(requests.RequestException, tries=3, delay=1, backoff=1, jitter=1)
+# def get_historical_races(use_cache=False, num_refresh_pages=5):
+#     all_races = OrderedDict()
+#
+#     # # If we are using the cache, only request `num_refresh_pages` from the server, then return the updated cache.
+#     # if use_cache:
+#     #     with open('races.pickle', 'rb') as infile:
+#     #         all_races.update(pickle.load(infile))
+#     #         for page in range(1, num_refresh_pages+1):
+#     #             latest_races, _, _ = _get_historical_races_by_page(page)
+#     #             for race in latest_races:
+#     #                 all_races.update({race['_id']: clean_race_data(race)})
+#     #         return all_races
+#
+#     # Get the total number of races the site contains.
+#     latest_races, num_total_races, _ = _get_historical_races_by_page(1)
+#
+#     # Get the number of races contained in a page.
+#     page_size = len(latest_races)
+#
+#     # Derive the number of pages of data:
+#     num_pages = int(math.ceil((num_total_races / page_size)))
+#
+#     # For each page, collect the race data from the HTTP endpoint:
+#     for races, _, page_num in Pool(NUM_HTTP_WORKERS).imap(_get_historical_races_by_page, range(1, num_pages+1)):
+#         for race in races:
+#             all_races.update({race['_id']: clean_race_data(race)})
+#
+#     # Write fresh data to the cache.
+#     if os.path.exists('races.pickle'):
+#         shutil.copy('races.pickle', 'races.pickle.backup')
+#
+#     with open('races.pickle', 'wb+') as outfile:
+#         pickle.dump(all_races, outfile)
+#
+#     return all_races
 
 
 @retry(requests.RequestException, tries=3, delay=1, backoff=1, jitter=1)
