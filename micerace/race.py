@@ -15,7 +15,7 @@ from tensorflow.keras.models import load_model
 from micerace.mice import Mouse
 from micerace import util
 
-NUM_SKIP_INITIAL_RACES = 1000
+NUM_SKIP_INITIAL_RACES = 2000
 
 
 class Race:
@@ -137,10 +137,6 @@ class HistoricalMiceRaceSystem:
     def latest_race(self):
         return self.races[-1]
 
-    @property
-    def previous_race(self):
-        return self.races[-2]
-
 
 class StatsAgent:
     def __init__(self,
@@ -158,7 +154,7 @@ class StatsAgent:
 
         self.num_primer_races = num_primer_races
         #TODO: ADD BACK#self.model = load_model('models/model-latest.h5')
-        self.model = load_model('models/first-working-model.h5')
+        self.model = load_model('models/model-latest.h5')
 
     def predict_current_race(self):
         output_dict = OrderedDict()
@@ -277,15 +273,22 @@ class StatsAgent:
             ('2h', timedelta(hours=2)),
             ('3h', timedelta(hours=3)),
             ('4h', timedelta(hours=5)),
+            ('6h', timedelta(hours=6)),
             ('8h', timedelta(hours=8)),
             ('12h', timedelta(hours=12)),
+            ('18h', timedelta(hours=18)),
             ('24h', timedelta(hours=24)),
+            ('36h', timedelta(hours=36)),
             ('2d', timedelta(days=2)),
             ('3d', timedelta(days=3)),
-            ('6d', timedelta(days=5)),
+            ('5d', timedelta(days=5)),
+            ('7d', timedelta(days=7)),
             ('10d', timedelta(days=10)),
+            ('15d', timedelta(days=15)),
             ('30d', timedelta(days=30)),
+            ('45d', timedelta(days=45)),
             ('60d', timedelta(days=60)),
+            ('75d', timedelta(days=75)),
             ('90d', timedelta(days=90)),
         ]
         if target_mice_names is None:
@@ -301,32 +304,55 @@ class StatsAgent:
                 'name_id': mouse.name_id,
                 'site_rating': mouse.site_rating,
                 'lifetime_win_ratio': mouse.lifetime_win_ratio,
-                **mouse.lane_win_vs_other_lane_ratio(),
-                'win_loss_current_lane': mouse.current_lane_total_win_ratio(),
-                'curr_repeat_wins': mouse.current_repeat_wins,
-                'average_repeat_wins': mouse.average_repeat_wins,
-                'max_repeat_wins': mouse.max_repeat_wins,
-                '5_race_win_ratio': mouse.win_ratio_last_n_races(5),
-                '10_race_win_ratio': mouse.win_ratio_last_n_races(10),
-                '25_race_win_ratio': mouse.win_ratio_last_n_races(25),
-                '50_race_win_ratio': mouse.win_ratio_last_n_races(50),
-                '100_race_win_ratio': mouse.win_ratio_last_n_races(100),
-                '5_race_lane_win_ratio': mouse.current_lane_total_win_ratio(num_races=5),
-                '10_race_lane_win_ratio': mouse.current_lane_total_win_ratio(num_races=10),
-                '25_race_lane_win_ratio': mouse.current_lane_total_win_ratio(num_races=25),
-                '50_race_lane_win_ratio': mouse.current_lane_total_win_ratio(num_races=50),
-                '100_race_lane_win_ratio': mouse.current_lane_total_win_ratio(num_races=100),
-                '250_race_lane_win_ratio': mouse.current_lane_total_win_ratio(num_races=250),
-                '500_race_lane_win_ratio': mouse.current_lane_total_win_ratio(num_races=500),
+                #**mouse.lane_win_vs_other_lane_ratio(),
+                #'win_loss_current_lane': mouse.current_lane_total_win_ratio(),
+                #'curr_repeat_wins': mouse.current_repeat_wins,
+                #'average_repeat_wins': mouse.average_repeat_wins,
+                #'max_repeat_wins': mouse.max_repeat_wins,
+
+                **dict(zip(['5_race_wins', '5_race_loss'], mouse.win_ratio_last_n_races(5))),
+                **dict(zip(['10_race_wins', '10_race_loss'], mouse.win_ratio_last_n_races(10))),
+                **dict(zip(['15_race_wins', '15_race_loss'], mouse.win_ratio_last_n_races(15))),
+                **dict(zip(['25_race_wins', '25_race_loss'], mouse.win_ratio_last_n_races(25))),
+                **dict(zip(['30_race_wins', '30_race_loss'], mouse.win_ratio_last_n_races(30))),
+                **dict(zip(['35_race_wins', '35_race_loss'], mouse.win_ratio_last_n_races(35))),
+                **dict(zip(['50_race_wins', '50_race_loss'], mouse.win_ratio_last_n_races(50))),
+                **dict(zip(['75_race_wins', '75_race_loss'], mouse.win_ratio_last_n_races(75))),
+                **dict(zip(['75_race_wins', '75_race_loss'], mouse.win_ratio_last_n_races(75))),
+                **dict(zip(['100_race_wins', '100_race_loss'], mouse.win_ratio_last_n_races(100))),
+                **dict(zip(['125_race_wins', '125_race_loss'], mouse.win_ratio_last_n_races(125))),
+                **dict(zip(['150_race_wins', '150_race_loss'], mouse.win_ratio_last_n_races(150))),
+                **dict(zip(['200_race_wins', '200_race_loss'], mouse.win_ratio_last_n_races(200))),
+                **dict(zip(['250_race_wins', '250_race_loss'], mouse.win_ratio_last_n_races(250))),
+                **dict(zip(['300_race_wins', '300_race_loss'], mouse.win_ratio_last_n_races(300))),
+                **dict(zip(['350_race_wins', '350_race_loss'], mouse.win_ratio_last_n_races(350))),
+                **dict(zip(['400_race_wins', '400_race_loss'], mouse.win_ratio_last_n_races(400))),
+                **dict(zip(['450_race_wins', '450_race_loss'], mouse.win_ratio_last_n_races(450))),
+                **dict(zip(['500_race_wins', '500_race_loss'], mouse.win_ratio_last_n_races(500))),
+                **dict(zip(['5_race_lane_wins', '5_race_lane_loss'], mouse.current_lane_total_win_ratio(num_races=5))),
+                **dict(zip(['10_race_lane_wins', '10_race_lane_loss'], mouse.current_lane_total_win_ratio(num_races=10))),
+                **dict(zip(['15_race_lane_wins', '15_race_lane_loss'], mouse.current_lane_total_win_ratio(num_races=15))),
+                **dict(zip(['25_race_lane_wins', '25_race_lane_loss'], mouse.current_lane_total_win_ratio(num_races=25))),
+                **dict(zip(['35_race_lane_wins', '35_race_lane_loss'], mouse.current_lane_total_win_ratio(num_races=35))),
+                **dict(zip(['50_race_lane_wins', '50_race_lane_loss'], mouse.current_lane_total_win_ratio(num_races=50))),
+                **dict(zip(['75_race_lane_wins', '75_race_lane_loss'], mouse.current_lane_total_win_ratio(num_races=75))),
+                **dict(zip(['100_race_lane_wins', '100_race_lane_loss'], mouse.current_lane_total_win_ratio(num_races=100))),
+                **dict(zip(['150_race_lane_wins', '150_race_lane_loss'], mouse.current_lane_total_win_ratio(num_races=150))),
+                **dict(zip(['175_race_lane_wins', '175_race_lane_loss'], mouse.current_lane_total_win_ratio(num_races=175))),
+                **dict(zip(['200_race_lane_wins', '200_race_lane_loss'], mouse.current_lane_total_win_ratio(num_races=200))),
+                **dict(zip(['250_race_lane_wins', '250_race_lane_loss'], mouse.current_lane_total_win_ratio(num_races=250))),
+                **dict(zip(['300_race_lane_wins', '300_race_lane_loss'], mouse.current_lane_total_win_ratio(num_races=300))),
+                **dict(zip(['375_race_lane_wins', '375_race_lane_loss'], mouse.current_lane_total_win_ratio(num_races=375))),
+                **dict(zip(['500_race_lane_wins', '500_race_lane_loss'], mouse.current_lane_total_win_ratio(num_races=500))),
             })
 
             for interval_str, interval in intervals:
                 interval_stats = mouse.interval_stats(interval)
-                lane_win_ratio_vs_others = interval_stats.pop('lane_win_ratio_vs_others')
+                #lane_win_ratio_vs_others = interval_stats.pop('lane_win_ratio_vs_others')
                 for k, v in interval_stats.items():
                     mouse_stats.update({f'{interval_str}_{k}': v})
-                for k, v in lane_win_ratio_vs_others.items():
-                    mouse_stats.update({f'{interval_str}_{k}': v})
+                #for k, v in lane_win_ratio_vs_others.items():
+                #    mouse_stats.update({f'{interval_str}_{k}': v})
 
                 #mouse_stats.update({interval_str: mouse.interval_stats(interval)})
 
@@ -339,12 +365,12 @@ class StatsAgent:
 
 def predict_current_race():
     stats_agent = StatsAgent(
-        use_cache=True, training=False, num_refresh_pages=10, num_primer_races=NUM_SKIP_INITIAL_RACES)
+        use_cache=True, training=False, num_refresh_pages=20, num_primer_races=NUM_SKIP_INITIAL_RACES)
     stats_agent.predict_current_race()
 
 
 def build_training_data():
-    stats_agent = StatsAgent(use_cache=False, training=True, num_primer_races=NUM_SKIP_INITIAL_RACES)
+    stats_agent = StatsAgent(use_cache=True, training=True, num_primer_races=NUM_SKIP_INITIAL_RACES)
     stats_agent.build_training_data()
 
 

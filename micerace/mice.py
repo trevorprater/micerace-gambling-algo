@@ -2,6 +2,7 @@ import statistics
 from datetime import datetime
 
 from .util import MouseNames, MouseColors
+from datetime import timedelta
 
 
 class Mouse:
@@ -90,7 +91,7 @@ class Mouse:
                     races_lost += 1
             n -= 1
 
-        return races_won / float(races_won + races_lost)
+        return races_won, races_lost
 
     def lane_win_vs_other_lane_ratio(self, time_delta=None):
         now = self.all_races[-1]._event_starts_at
@@ -114,6 +115,8 @@ class Mouse:
         ratios.update({'current_lane_ratio': lane_ctr[current_race_lane] / float(max(sum(lane_ctr), 1))})
         return ratios
 
+
+
     def current_lane_total_win_ratio(self, time_delta=None, num_races=99999999):
         """In the current lane, what is the wins/total_races ratio?"""
         now = self.all_races[-1]._event_starts_at
@@ -136,10 +139,12 @@ class Mouse:
                         losses_in_lane += 1
             num_races -= 1
 
-        if wins_in_lane + losses_in_lane == 0:
-            return 0.0
+        return (wins_in_lane, losses_in_lane)
 
-        return wins_in_lane / float(losses_in_lane + wins_in_lane)
+        #if wins_in_lane + losses_in_lane == 0:
+        #    return 0.0
+
+        #return wins_in_lane / float(losses_in_lane + wins_in_lane)
 
     def win_ratio_since(self, time_delta):
         now = self.all_races[-1]._event_starts_at
@@ -162,14 +167,21 @@ class Mouse:
 
         return ratio, races_won, races_lost
 
-    def win_times_since(self, time_delta):
+    def win_times_since(self, time_delta: timedelta):
         now = self.all_races[-1]._event_starts_at
         max_race_age = now - time_delta
 
         times = []
-        for race in self.winning_races[::-1]:
-            if race.completed_at >= max_race_age:
-                times.append(race.elapsed_time)
+
+        while True:
+            for race in self.winning_races[::-1]:
+                if race.completed_at >= max_race_age:
+                    times.append(race.elapsed_time)
+            else:
+                if not len(times):
+                    max_race_age = (max_race_age - timedelta(hours=1))
+                else:
+                    break
 
         stats = {
             'min_t': min(times) if len(times) else None,
@@ -226,11 +238,14 @@ class Mouse:
             self.max_repeat_wins = max_repeat_wins
 
         return {
-            'current_repeat_wins': self.current_repeat_wins,
+            #'current_repeat_wins': self.current_repeat_wins,
             'avg_repeat_w': average_repeat_wins,
             'median_repeat_w': median_repeat_wins,
             'max_repeat_w': max_repeat_wins,
         }
+
+    def get_average_repeat_wins(self, time_delta):
+        return self.repeat_wins(time_delta)['avg_repeat_w']
 
     def populate_global_stats(self):
         pass
@@ -238,14 +253,17 @@ class Mouse:
 
     def interval_stats(self, time_delta):
         win_ratio, races_won, races_lost = self.win_ratio_since(time_delta)
+        wins_in_lane, losses_in_lane = self.current_lane_total_win_ratio(time_delta)
         stats = {
-            'win_ratio': win_ratio,
+            #'win_ratio': win_ratio,
             'wins': races_won,
             'losses': races_lost,
-            'win_loss_current_lane': self.current_lane_total_win_ratio(time_delta),
-            **self.repeat_wins(time_delta),
+            'wins_in_lane': wins_in_lane,
+            'losses_in_lane': losses_in_lane,
+            'average_repeat_wins': self.get_average_repeat_wins(time_delta),
+            #**self.repeat_wins(time_delta),
             **self.win_times_since(time_delta),
-            'lane_win_ratio_vs_others': self.lane_win_vs_other_lane_ratio(time_delta),
+            #'lane_win_ratio_vs_others': self.lane_win_vs_other_lane_ratio(time_delta),
         }
 
         return stats
