@@ -36,9 +36,6 @@ x_data = np.expand_dims(x_data, axis=2)
 y_data = winners.to_numpy(dtype=int)
 y_data = to_categorical(y_data, num_classes=4)
 
-#x_data = x_data[:int(len(x_data)*0.4)]
-#y_data = y_data[:int(len(y_data)*0.4)]
-
 model = Sequential()
 model.add(Conv1D(filters=64, kernel_size=3, activation='relu', input_shape=x_data.shape[1:]))
 model.add(Conv1D(filters=64, kernel_size=3, activation='relu'))

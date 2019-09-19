@@ -141,10 +141,6 @@ class Mouse:
 
         return (wins_in_lane, losses_in_lane)
 
-        #if wins_in_lane + losses_in_lane == 0:
-        #    return 0.0
-
-        #return wins_in_lane / float(losses_in_lane + wins_in_lane)
 
     def win_ratio_since(self, time_delta):
         now = self.all_races[-1]._event_starts_at
@@ -247,23 +243,20 @@ class Mouse:
     def get_average_repeat_wins(self, time_delta):
         return self.repeat_wins(time_delta)['avg_repeat_w']
 
-    def populate_global_stats(self):
-        pass
-        #self.repeat_wins()
 
     def interval_stats(self, time_delta):
         win_ratio, races_won, races_lost = self.win_ratio_since(time_delta)
         wins_in_lane, losses_in_lane = self.current_lane_total_win_ratio(time_delta)
         stats = {
-            #'win_ratio': win_ratio,
+            'win_ratio': win_ratio,
             'wins': races_won,
             'losses': races_lost,
             'wins_in_lane': wins_in_lane,
             'losses_in_lane': losses_in_lane,
             'average_repeat_wins': self.get_average_repeat_wins(time_delta),
-            #**self.repeat_wins(time_delta),
+            'lane_win_ratio_vs_others': self.lane_win_vs_other_lane_ratio(time_delta),
+            **self.repeat_wins(time_delta),
             **self.win_times_since(time_delta),
-            #'lane_win_ratio_vs_others': self.lane_win_vs_other_lane_ratio(time_delta),
         }
 
         return stats

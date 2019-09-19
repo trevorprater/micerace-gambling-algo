@@ -82,10 +82,7 @@ class MiceRaceSystem:
         self.races = []
         http_races = util.get_all_races(use_cache=self.use_cache, num_refresh_pages=self.num_refresh_pages)
         http_races.reverse()
-        # TODO: ADD BACK!!!!
-        rand_back_ndx = len(http_races)-random.randint(1, 20)
         for race_meta in http_races[NUM_SKIP_INITIAL_RACES:]:
-        #for race_meta in http_races[NUM_SKIP_INITIAL_RACES:rand_back_ndx]:
             race = Race(**race_meta)
             self.races.append(race)
             for mouse_name in race.mice_names:
@@ -176,7 +173,6 @@ class StatsAgent:
             for k, v in mouse_stats.items():
                 output_dict[f"mouse_{mouse_num}_{k}"] = v
 
-        # this is only used to mimic the training functionality, list of dicts, but this time only one dict.
         all_stats = [output_dict]
         df = pd.DataFrame(all_stats).fillna(value=0)
         names_1 =\
@@ -195,15 +191,8 @@ class StatsAgent:
         race_stats_np_arr = np.expand_dims(race_stats_np_arr, axis=2)
 
         predict = self.model.predict(race_stats_np_arr, verbose=0)
-        print('old model:', dict(zip(self.system.latest_race.mice_names, [round(p, 2) for p in predict[0]])))
+        print(dict(zip(self.system.latest_race.mice_names, [round(p, 2) for p in predict[0]]))))
 
-        new_model = load_model('models/model-backup-8.h5')
-        predict = new_model.predict(race_stats_np_arr, verbose=0)
-        print('80-20 model:', dict(zip(self.system.latest_race.mice_names, [round(p, 2) for p in predict[0]])))
-
-        new_model = load_model('models/model-latest.h5')
-        predict = new_model.predict(race_stats_np_arr, verbose=0)
-        print('99-1 model:', dict(zip(self.system.latest_race.mice_names, [round(p, 2) for p in predict[0]])))
         if self.system.latest_race.completed:
             print(self.system.latest_race.winner_name, self.system.latest_race.winner_position_ndx)
 
@@ -304,12 +293,11 @@ class StatsAgent:
                 'name_id': mouse.name_id,
                 'site_rating': mouse.site_rating,
                 'lifetime_win_ratio': mouse.lifetime_win_ratio,
-                #**mouse.lane_win_vs_other_lane_ratio(),
-                #'win_loss_current_lane': mouse.current_lane_total_win_ratio(),
-                #'curr_repeat_wins': mouse.current_repeat_wins,
-                #'average_repeat_wins': mouse.average_repeat_wins,
-                #'max_repeat_wins': mouse.max_repeat_wins,
-
+                'win_loss_current_lane': mouse.current_lane_total_win_ratio(),
+                'curr_repeat_wins': mouse.current_repeat_wins,
+                'average_repeat_wins': mouse.average_repeat_wins,
+                'max_repeat_wins': mouse.max_repeat_wins,
+                **mouse.lane_win_vs_other_lane_ratio(),
                 **dict(zip(['5_race_wins', '5_race_loss'], mouse.win_ratio_last_n_races(5))),
                 **dict(zip(['10_race_wins', '10_race_loss'], mouse.win_ratio_last_n_races(10))),
                 **dict(zip(['15_race_wins', '15_race_loss'], mouse.win_ratio_last_n_races(15))),
@@ -348,16 +336,10 @@ class StatsAgent:
 
             for interval_str, interval in intervals:
                 interval_stats = mouse.interval_stats(interval)
-                #lane_win_ratio_vs_others = interval_stats.pop('lane_win_ratio_vs_others')
                 for k, v in interval_stats.items():
                     mouse_stats.update({f'{interval_str}_{k}': v})
-                #for k, v in lane_win_ratio_vs_others.items():
-                #    mouse_stats.update({f'{interval_str}_{k}': v})
-
-                #mouse_stats.update({interval_str: mouse.interval_stats(interval)})
 
             mouse_stats.update(self.lane_win_ratios())
-
             mice_stats.append(mouse_stats)
 
         return sorted(mice_stats, key=lambda k: k['site_rating'], reverse=True)
@@ -383,9 +365,10 @@ def eyeball_current_race_stats():
 
 
 if __name__ == '__main__':
-    predict_current_race()
-    #build_training_data()
-    #eyeball_current_race_stats()
-
-
+    if sys.argv[0] == 'predict':
+        predict_current_race()
+    elif sys.argv[1] == 'train':
+        build_training_data()
+    else:
+        eyeball_current_race_stats()
 
