@@ -1,12 +1,11 @@
 import os
 import pickle
-import shutil
 import json
 import sys
 import logging
 import math
+from enum import Enum
 from datetime import datetime
-from collections import OrderedDict
 from multiprocessing import Pool
 from random import randint
 
@@ -35,6 +34,59 @@ def format_timestamp(ts):
         return datetime.strptime(ts[:-1] + '000', '%Y-%m-%dT%H:%M:%S.%f')
 
 
+class MouseColors(Enum):
+    brown = 1
+    black = 2
+    grey = 3
+    gray = 3
+    yellow = 4
+    white = 5
+    orange = 6
+    silver = 7
+    red = 8
+
+
+class MouseNames(Enum):
+    mario = 0
+    gold = 1
+    bulp = 2
+    toast = 3
+    scratch = 4
+    mickey = 5
+    robin = 6
+    zeus = 7
+    ester = 8
+    bubu = 9
+    greg = 10
+    vinnie = 11
+    cheddar = 12
+    desperaux = 13
+    fluffy = 14
+    levi = 15
+    nibbles = 16
+    flamengo = 17
+    bella = 18
+    dagi = 19
+    minnie = 20
+    mama_mia = 21
+    merlin = 22
+    silver = 23
+    york = 24
+    scruffy = 25
+    barbie = 26
+    papa_grey = 27
+    whiskers = 28
+    coco = 29
+    fortuna = 30
+    snow = 31
+    laila = 32
+    hamish = 33
+    mione = 34
+    catnip = 35
+    squeak = 36
+
+
+
 # TODO CACHING
 @retry(requests.RequestException, tries=3, delay=1, backoff=1, jitter=1)
 def get_all_races(use_cache, num_refresh_pages=5):
@@ -50,7 +102,7 @@ def get_all_races(use_cache, num_refresh_pages=5):
 
     num_races_seen = 0
     if use_cache:
-        all_races = pickle.load(open('races.pickle', 'rb'))
+        all_races = pickle.load(open('pickles/races.pickle', 'rb'))
         for page_num in range(num_refresh_pages):
             races, _, _ = _get_historical_races_by_page(page_num)
             for race in races:
@@ -70,10 +122,10 @@ def get_all_races(use_cache, num_refresh_pages=5):
 
     # Keep a backup ~5% of the time.
     if randint(1, 20) == 5:
-        with open('races-{}.pickle'.format(datetime.utcnow()), 'wb+') as outfile:
+        with open('pickles/races-{}.pickle'.format(datetime.strftime(datetime.utcnow(), '%Y-%m-%d-%H-%M-%S')), 'wb+') as outfile:
             pickle.dump(all_races, outfile)
 
-    with open('races.pickle', 'wb+') as outfile:
+    with open('pickles/races.pickle', 'wb+') as outfile:
         pickle.dump(all_races, outfile)
 
     return sorted(all_races.values(), key=lambda r: r['eventStart'], reverse=True)
